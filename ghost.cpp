@@ -1,6 +1,7 @@
 #include <iostream>
 #include <fstream>
 #include <map>
+#include <random>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -95,20 +96,30 @@ void backup_scores(PrefixTree& tree) {
 constexpr char k_challenge = '0';
 constexpr char k_defeat = '1';
 
-char play(const PrefixTree& tree, const string& acc) {
+default_random_engine rng;
+
+char choice(const string& options) {
+  uniform_int_distribution<int> unif(0, options.size()-1);
+  int index = unif(rng);
+  return options[index];
+}
+
+char play(const PrefixTree& tree, const string& acc, bool optimal = false) {
   auto it = tree.find(Prefix(acc));
   if (it == tree.end())
     return k_challenge;
   const auto& info = it->second;
-  char best_play = k_defeat;
+  string possible_plays;
   for (char next_c : info.continuations) {
     string nxt = acc + next_c;
     const auto& info_child = tree.find(Prefix(nxt))->second;
     int tent_score = info_child.score + 1;
-    if (tent_score == info.score)
-      best_play = next_c;
+    if (tent_score == info.score || (!optimal && tent_score%2 == 1))
+      possible_plays.push_back(next_c);
   }
-  return best_play;
+  if (possible_plays.empty())
+    return k_defeat;
+  return choice(possible_plays);
 }
 
 string challenge(const PrefixTree& tree, string acc) {
@@ -123,6 +134,9 @@ constexpr int cpu_player = 0;
 constexpr int human_player = 0;
 
 int main() {
+  //rng.seed(42);
+  rng.seed(random_device{}());
+
   const auto& words = get_dictionary();
   PrefixTree prefix_tree = compute_prefix_tree(words);
   backup_scores(prefix_tree);
@@ -135,7 +149,7 @@ int main() {
   while (true) {
     char last_play;
     if (next_player == cpu_player)
-      last_play = play(prefix_tree, word);
+      last_play = play(prefix_tree, word, true);
     else
       cin >> last_play;
     next_player = 1 - next_player;
@@ -143,7 +157,7 @@ int main() {
       if (next_player == cpu_player) {
         cout << "Proposed word: "
              << challenge(prefix_tree, word) << endl
-             << "Computer wins!";
+             << "Computer wins!" << endl;
       }
       else {
         cout << "No known word starting with " << word
